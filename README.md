@@ -20,7 +20,7 @@ extensions in their ext_emconf.php:
     'constraints' => [
         ...
         'depends' => [
-            'func' => '9.0.0-9.0.99',
+            'func' => '9.0.0-9.5.99',
         ],
     ],
 

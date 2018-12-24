@@ -39,7 +39,7 @@ class PageFunctionsController
      * @var array
      * @internal
      */
-    public $pageinfo;
+    public $pageInfo;
 
     /**
      * ModuleTemplate Container
@@ -53,7 +53,7 @@ class PageFunctionsController
      *
      * @var \TYPO3\CMS\Backend\Template\DocumentTemplate
      */
-    public $doc;
+    public $documentTemplate;
 
     /**
      * The name of the module
@@ -70,14 +70,14 @@ class PageFunctionsController
     /**
      * @var StandaloneView
      */
-    protected $view;
+    protected $standaloneView;
 
     /**
      * Generally used for accumulating the output content of backend modules
      *
      * @var string
      */
-    public $content = '';
+    public $outputContent = '';
 
     /**
      * The integer value of the GET/POST var, 'id'. Used for submodules to the 'Web' module (page id)
@@ -93,7 +93,7 @@ class PageFunctionsController
      * @see init()
      * @var string
      */
-    public $perms_clause;
+    public $permissionsClause;
 
     /**
      * The module menu items array. Each key represents a key for which values can range between the items in the array of that key.
@@ -101,17 +101,17 @@ class PageFunctionsController
      * @see init()
      * @var array
      */
-    public $MOD_MENU = [
+    public $moduleMenu = [
         'function' => []
     ];
 
     /**
-     * Current settings for the keys of the MOD_MENU array
+     * Current settings for the keys of the moduleMenu array
      *
-     * @see $MOD_MENU
+     * @see $moduleMenu
      * @var array
      */
-    public $MOD_SETTINGS = [];
+    public $moduleSettings = [];
 
 
     /**
@@ -120,7 +120,7 @@ class PageFunctionsController
      * @see menuConfig()
      * @var array
      */
-    public $modTSconfig;
+    public $moduleTSConfig;
 
     /**
      * If type is 'ses' then the data is stored as session-lasting data. This means that it'll be wiped out the next time the user logs in.
@@ -129,25 +129,25 @@ class PageFunctionsController
      * @see menuConfig(), \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()
      * @var string
      */
-    public $modMenu_type = '';
+    public $moduleMenuType = '';
 
     /**
-     * dontValidateList can be used to list variables that should not be checked if their value is found in the MOD_MENU array. Used for dynamically generated menus.
+     * dontValidateList can be used to list variables that should not be checked if their value is found in the moduleMenu array. Used for dynamically generated menus.
      * Can be set from extension classes of this class before the init() function is called.
      *
      * @see menuConfig(), \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()
      * @var string
      */
-    public $modMenu_dontValidateList = '';
+    public $moduleMenuDontValidateList = '';
 
     /**
-     * List of default values from $MOD_MENU to set in the output array (only if the values from MOD_MENU are not arrays)
+     * List of default values from $moduleMenu to set in the output array (only if the values from moduleMenu are not arrays)
      * Can be set from extension classes of this class before the init() function is called.
      *
      * @see menuConfig(), \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()
      * @var string
      */
-    public $modMenu_setDefaultList = '';
+    public $moduleMenuSetDefaultList = '';
 
     /**
      * Contains module configuration parts from TBE_MODULES_EXT if found
@@ -155,15 +155,28 @@ class PageFunctionsController
      * @see handleExternalFunctionValue()
      * @var array
      */
-    public $extClassConf;
+    public $extensionClassConfiguration;
 
     /**
      * May contain an instance of a 'Function menu module' which connects to this backend module.
      *
      * @see checkExtObj()
-     * @var AbstractFunctionModule
+     * @var PageFunctionsController
      */
-    public $extObj;
+    public $extensionObject;
+
+    /**
+     * Module Config
+     *
+     * @see init()
+     * @var array
+     */
+    protected $moduleConfig = [];
+
+    /**
+     * @var string
+     */
+    public $command = '';
 
 
     /**
@@ -174,7 +187,7 @@ class PageFunctionsController
         $this->iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         $this->moduleTemplate = GeneralUtility::makeInstance(ModuleTemplate::class);
         $this->getLanguageService()->includeLLFile('EXT:func/Resources/Private/Language/locallang_mod_web_func.xlf');
-        $this->MCONF = [
+        $this->moduleConfig = [
             'name' => $this->moduleName,
         ];
     }
@@ -187,12 +200,12 @@ class PageFunctionsController
     public function init()
     {
         // Name might be set from outside
-        if (!$this->MCONF['name']) {
-            $this->MCONF = $GLOBALS['MCONF'];
+        if (!$this->moduleConfig['name']) {
+            $this->moduleConfig = $GLOBALS['MCONF'];
         }
         $this->id = (int)GeneralUtility::_GP('id');
-        $this->CMD = GeneralUtility::_GP('CMD');
-        $this->perms_clause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
+        $this->command = GeneralUtility::_GP('CMD');
+        $this->permissionsClause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
         $this->menuConfig();
         $this->handleExternalFunctionValue();
     }
@@ -217,7 +230,7 @@ class PageFunctionsController
         $this->checkSubExtObj();
         $this->main();
 
-        $this->moduleTemplate->setContent($this->content);
+        $this->moduleTemplate->setContent($this->outputContent);
 
         $response->getBody()->write($this->moduleTemplate->renderContent());
         return $response;
@@ -230,13 +243,13 @@ class PageFunctionsController
     {
         // Access check...
         // The page will show only if there is a valid page and if this page may be viewed by the user
-        $this->pageinfo = BackendUtility::readPageAccess($this->id, $this->perms_clause);
-        if ($this->pageinfo) {
-            $this->moduleTemplate->getDocHeaderComponent()->setMetaInformation($this->pageinfo);
+        $this->pageInfo = BackendUtility::readPageAccess($this->id, $this->permissionsClause);
+        if ($this->pageInfo) {
+            $this->moduleTemplate->getDocHeaderComponent()->setMetaInformation($this->pageInfo);
         }
-        $access = is_array($this->pageinfo);
+        $access = is_array($this->pageInfo);
         // We keep this here, in case somebody relies on the old doc being here
-        $this->doc = GeneralUtility::makeInstance(DocumentTemplate::class);
+        $this->documentTemplate = GeneralUtility::makeInstance(DocumentTemplate::class);
         // Main
         if ($this->id && $access) {
             // JavaScript
@@ -246,32 +259,32 @@ class PageFunctionsController
             // Setting up the context sensitive menu:
             $this->moduleTemplate->getPageRenderer()->loadRequireJsModule('TYPO3/CMS/Backend/ContextMenu');
 
-            $this->view = $this->getFluidTemplateObject('func', 'func');
-            $this->view->assign('moduleName', $this->getModuleUrl('web_func'));
-            $this->view->assign('id', $this->id);
-            $this->view->assign('functionMenuModuleContent', $this->getExtObjContent());
+            $this->standaloneView = $this->getFluidTemplateObject('func', 'func');
+            $this->standaloneView->assign('moduleName', $this->getModuleUrl('web_func'));
+            $this->standaloneView->assign('id', $this->id);
+            $this->standaloneView->assign('functionMenuModuleContent', $this->getExtObjContent());
             // Setting up the buttons and markers for docheader
             $this->getButtons();
             $this->generateMenu();
-            $this->content .= $this->view->render();
+            $this->outputContent .= $this->standaloneView->render();
         } else {
             // If no access or if ID == zero
             $title = $this->getLanguageService()->getLL('title');
             $message = $this->getLanguageService()->getLL('clickAPage_content');
-            $this->view = $this->getFluidTemplateObject('func', 'func', 'InfoBox');
-            $this->view->assignMultiple([
+            $this->standaloneView = $this->getFluidTemplateObject('func', 'func', 'InfoBox');
+            $this->standaloneView->assignMultiple([
                 'title' => $title,
                 'message' => $message,
                 'state' => InfoboxViewHelper::STATE_INFO
             ]);
-            $this->content = $this->view->render();
+            $this->outputContent = $this->standaloneView->render();
             // Setting up the buttons and markers for docheader
             $this->getButtons();
         }
     }
 
     /**
-     * Generates the menu based on $this->MOD_MENU
+     * Generates the menu based on $this->moduleMenu
      *
      * @throws \InvalidArgumentException
      */
@@ -279,7 +292,7 @@ class PageFunctionsController
     {
         $menu = $this->moduleTemplate->getDocHeaderComponent()->getMenuRegistry()->makeMenu();
         $menu->setIdentifier('WebFuncJumpMenu');
-        foreach ($this->MOD_MENU['function'] as $controller => $title) {
+        foreach ($this->moduleMenu['function'] as $controller => $title) {
             $item = $menu
                 ->makeMenuItem()
                 ->setHref(
@@ -294,7 +307,7 @@ class PageFunctionsController
                     )
                 )
                 ->setTitle($title);
-            if ($controller === $this->MOD_SETTINGS['function']) {
+            if ($controller === $this->moduleSettings['function']) {
                 $item->setActive(true);
             }
             $menu->addMenuItem($item);
@@ -313,10 +326,10 @@ class PageFunctionsController
             ->setModuleName('_MOD_web_func')
             ->setFieldName('');
         $buttonBar->addButton($cshButton);
-        if ($this->id && is_array($this->pageinfo)) {
+        if ($this->id && is_array($this->pageInfo)) {
             // View page
             $viewButton = $buttonBar->makeLinkButton()
-                ->setOnClick(BackendUtility::viewOnClick($this->pageinfo['uid'], '', BackendUtility::BEgetRootLine($this->pageinfo['uid'])))
+                ->setOnClick(BackendUtility::viewOnClick($this->pageInfo['uid'], '', BackendUtility::BEgetRootLine($this->pageInfo['uid'])))
                 ->setTitle($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage'))
                 ->setIcon($this->iconFactory->getIcon('actions-view-page', Icon::SIZE_SMALL))
                 ->setHref('#');
@@ -325,7 +338,7 @@ class PageFunctionsController
             $shortcutButton = $buttonBar->makeShortcutButton()
                 ->setModuleName($this->moduleName)
                 ->setGetVariables(['id', 'edit_record', 'pointer', 'new_unique_uid', 'search_field', 'search_levels', 'showLimit'])
-                ->setSetVariables(array_keys($this->MOD_MENU));
+                ->setSetVariables(array_keys($this->moduleMenu));
             $buttonBar->addButton($shortcutButton);
         }
     }
@@ -374,30 +387,30 @@ class PageFunctionsController
     }
 
     /**
-     * Initializes the internal MOD_MENU array setting and unsetting items based on various conditions. It also merges in external menu items from the global array TBE_MODULES_EXT (see mergeExternalItems())
-     * Then MOD_SETTINGS array is cleaned up (see \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()) so it contains only valid values. It's also updated with any SET[] values submitted.
-     * Also loads the modTSconfig internal variable.
+     * Initializes the internal moduleMenu array setting and unsetting items based on various conditions. It also merges in external menu items from the global array TBE_MODULES_EXT (see mergeExternalItems())
+     * Then moduleSettings array is cleaned up (see \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()) so it contains only valid values. It's also updated with any SET[] values submitted.
+     * Also loads the moduleTSConfig internal variable.
      *
-     * @see init(), $MOD_MENU, $MOD_SETTINGS, \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData(), mergeExternalItems()
+     * @see init(), $moduleMenu, $moduleSettings, \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData(), mergeExternalItems()
      */
     private function menuConfig()
     {
         // Page / user TSconfig settings and blinding of menu-items
-        $this->modTSconfig['properties'] = BackendUtility::getPagesTSconfig($this->id)['mod.'][$this->MCONF['name'] . '.'] ?? [];
-        $this->MOD_MENU['function'] = $this->mergeExternalItems($this->MCONF['name'], 'function', $this->MOD_MENU['function']);
-        $blindActions = $this->modTSconfig['properties']['menu.']['function.'] ?? [];
+        $this->moduleTSConfig['properties'] = BackendUtility::getPagesTSconfig($this->id)['mod.'][$this->moduleConfig['name'] . '.'] ?? [];
+        $this->moduleMenu['function'] = $this->mergeExternalItems($this->moduleConfig['name'], 'function', $this->moduleMenu['function']);
+        $blindActions = $this->moduleTSConfig['properties']['menu.']['function.'] ?? [];
         foreach ($blindActions as $key => $value) {
-            if (!$value && array_key_exists($key, $this->MOD_MENU['function'])) {
-                unset($this->MOD_MENU['function'][$key]);
+            if (!$value && array_key_exists($key, $this->moduleMenu['function'])) {
+                unset($this->moduleMenu['function'][$key]);
             }
         }
-        $this->MOD_SETTINGS = BackendUtility::getModuleData(
-            $this->MOD_MENU,
+        $this->moduleSettings = BackendUtility::getModuleData(
+            $this->moduleMenu,
             GeneralUtility::_GP('SET'),
-            $this->MCONF['name'],
-            $this->modMenu_type,
-            $this->modMenu_dontValidateList,
-            $this->modMenu_setDefaultList
+            $this->moduleConfig['name'],
+            $this->moduleMenuType,
+            $this->moduleMenuDontValidateList,
+            $this->moduleMenuSetDefaultList
         );
     }
 
@@ -415,9 +428,9 @@ class PageFunctionsController
     {
         $mergeArray = $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey];
         if (is_array($mergeArray)) {
-            foreach ($mergeArray as $k => $v) {
-                if (((string)$v['ws'] === '' || $this->getBackendUser()->workspace === 0 && GeneralUtility::inList($v['ws'], 'online')) || $this->getBackendUser()->workspace === -1 && GeneralUtility::inList($v['ws'], 'offline') || $this->getBackendUser()->workspace > 0 && GeneralUtility::inList($v['ws'], 'custom')) {
-                    $menuArr[$k] = $this->getLanguageService()->sL($v['title']);
+            foreach ($mergeArray as $key => $value) {
+                if (((string)$value['ws'] === '' || $this->getBackendUser()->workspace === 0 && GeneralUtility::inList($value['ws'], 'online')) || $this->getBackendUser()->workspace === -1 && GeneralUtility::inList($value['ws'], 'offline') || $this->getBackendUser()->workspace > 0 && GeneralUtility::inList($value['ws'], 'custom')) {
+                    $menuArr[$key] = $this->getLanguageService()->sL($value['title']);
                 }
             }
         }
@@ -425,26 +438,26 @@ class PageFunctionsController
     }
 
     /**
-     * Loads $this->extClassConf with the configuration for the CURRENT function of the menu.
+     * Loads $this->extensionClassConfiguration with the configuration for the CURRENT function of the menu.
      *
-     * @param string $MM_key The key to MOD_MENU for which to fetch configuration. 'function' is default since it is first and foremost used to get information per "extension object" (I think that is what its called)
-     * @param string $MS_value The value-key to fetch from the config array. If NULL (default) MOD_SETTINGS[$MM_key] will be used. This is useful if you want to force another function than the one defined in MOD_SETTINGS[function]. Call this in init() function of your Script Class: handleExternalFunctionValue('function', $forcedSubModKey)
+     * @param string $MM_key The key to moduleMenu for which to fetch configuration. 'function' is default since it is first and foremost used to get information per "extension object" (I think that is what its called)
+     * @param string $MS_value The value-key to fetch from the config array. If NULL (default) moduleSettings[$MM_key] will be used. This is useful if you want to force another function than the one defined in moduleSettings[function]. Call this in init() function of your Script Class: handleExternalFunctionValue('function', $forcedSubModKey)
      * @see getExternalItemConfig(), init()
      */
     private function handleExternalFunctionValue($MM_key = 'function', $MS_value = null)
     {
         if ($MS_value === null) {
-            $MS_value = $this->MOD_SETTINGS[$MM_key];
+            $MS_value = $this->moduleSettings[$MM_key];
         }
-        $this->extClassConf = $this->getExternalItemConfig($this->MCONF['name'], $MM_key, $MS_value);
+        $this->extensionClassConfiguration = $this->getExternalItemConfig($this->moduleConfig['name'], $MM_key, $MS_value);
     }
 
     /**
      * Returns configuration values from the global variable $TBE_MODULES_EXT for the module given.
-     * For example if the module is named "web_info" and the "function" key ($menuKey) of MOD_SETTINGS is "stat" ($value) then you will have the values of $TBE_MODULES_EXT['webinfo']['MOD_MENU']['function']['stat'] returned.
+     * For example if the module is named "web_info" and the "function" key ($menuKey) of moduleSettings is "stat" ($value) then you will have the values of $TBE_MODULES_EXT['webinfo']['MOD_MENU']['function']['stat'] returned.
      *
      * @param string $modName Module name
-     * @param string $menuKey Menu key, eg. "function" for the function menu. See $this->MOD_MENU
+     * @param string $menuKey Menu key, eg. "function" for the function menu. See $this->moduleMenu
      * @param string $value Optionally the value-key to fetch from the array that would otherwise have been returned if this value was not set. Look source...
      * @return mixed The value from the TBE_MODULES_EXT array.
      * @see handleExternalFunctionValue()
@@ -459,26 +472,26 @@ class PageFunctionsController
 
 
     /**
-     * Creates an instance of the class found in $this->extClassConf['name'] in $this->extObj if any (this should hold three keys, "name", "path" and "title" if a "Function menu module" tries to connect...)
-     * This value in extClassConf might be set by an extension (in an ext_tables/ext_localconf file) which thus "connects" to a module.
-     * The array $this->extClassConf is set in handleExternalFunctionValue() based on the value of MOD_SETTINGS[function]
-     * If an instance is created it is initiated with $this passed as value and $this->extClassConf as second argument. Further the $this->MOD_SETTING is cleaned up again after calling the init function.
+     * Creates an instance of the class found in $this->extensionClassConfiguration['name'] in $this->extensionObject if any (this should hold three keys, "name", "path" and "title" if a "Function menu module" tries to connect...)
+     * This value in extensionClassConfiguration might be set by an extension (in an ext_tables/ext_localconf file) which thus "connects" to a module.
+     * The array $this->extensionClassConfiguration is set in handleExternalFunctionValue() based on the value of moduleSettings[function]
+     * If an instance is created it is initiated with $this passed as value and $this->extensionClassConfiguration as second argument. Further the $this->MOD_SETTING is cleaned up again after calling the init function.
      *
      * @see handleExternalFunctionValue(), \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction(), $extObj
      */
     private function checkExtObj()
     {
-        if (is_array($this->extClassConf) && $this->extClassConf['name']) {
-            $this->extObj = GeneralUtility::makeInstance($this->extClassConf['name']);
-            $this->extObj->init($this, $this->extClassConf);
+        if (is_array($this->extensionClassConfiguration) && $this->extensionClassConfiguration['name']) {
+            $this->extensionObject = GeneralUtility::makeInstance($this->extensionClassConfiguration['name']);
+            $this->extensionObject->init($this, $this->extensionClassConfiguration);
             // Re-write:
-            $this->MOD_SETTINGS = BackendUtility::getModuleData(
-                $this->MOD_MENU,
+            $this->moduleSettings = BackendUtility::getModuleData(
+                $this->moduleMenu,
                 GeneralUtility::_GP('SET'),
-                $this->MCONF['name'],
-                $this->modMenu_type,
-                $this->modMenu_dontValidateList,
-                $this->modMenu_setDefaultList
+                $this->moduleConfig['name'],
+                $this->moduleMenuType,
+                $this->moduleMenuDontValidateList,
+                $this->moduleMenuSetDefaultList
             );
         }
     }
@@ -488,8 +501,8 @@ class PageFunctionsController
      */
     private function checkSubExtObj()
     {
-        if (is_object($this->extObj)) {
-            $this->extObj->checkExtObj();
+        if (is_object($this->extensionObject)) {
+            $this->extensionObject->checkExtObj();
         }
     }
 
@@ -501,11 +514,11 @@ class PageFunctionsController
      */
     private function getExtObjContent()
     {
-        $savedContent = $this->content;
-        $this->content = '';
+        $savedContent = $this->outputContent;
+        $this->outputContent = '';
         $this->extObjContent();
-        $newContent = $this->content;
-        $this->content = $savedContent;
+        $newContent = $this->outputContent;
+        $this->outputContent = $savedContent;
         return $newContent;
     }
 
@@ -517,7 +530,7 @@ class PageFunctionsController
      */
     private function extObjContent()
     {
-        if ($this->extObj === null) {
+        if ($this->extensionObject === null) {
             $flashMessage = GeneralUtility::makeInstance(
                 FlashMessage::class,
                 $this->getLanguageService()->sL('LLL:EXT:backend/Resources/Private/Language/locallang.xlf:no_modules_registered'),
@@ -530,9 +543,9 @@ class PageFunctionsController
             $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
             $defaultFlashMessageQueue->enqueue($flashMessage);
         } else {
-            $this->extObj->pObj = $this;
-            if (is_callable([$this->extObj, 'main'])) {
-                $this->content .= $this->extObj->main();
+            $this->extensionObject->pObj = $this;
+            if (is_callable([$this->extensionObject, 'main'])) {
+                $this->outputContent .= $this->extensionObject->main();
             }
         }
     }
