@@ -27,7 +27,7 @@ use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Backend\Template\DocumentTemplate;
-use TYPO3\CMS\Backend\Routing\UriBuilder;
+use TYPO3\CMS\Func\Service\PageFunctionsService;
 
 /**
  * Script Class for the Web > Functions module
@@ -178,6 +178,10 @@ class PageFunctionsController
      */
     public $command = '';
 
+    /**
+     * @var \TYPO3\CMS\Func\Service\PageFunctionsService
+     */
+    protected $pageFunctionsService;
 
     /**
      * Constructor
@@ -186,7 +190,8 @@ class PageFunctionsController
     {
         $this->iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         $this->moduleTemplate = GeneralUtility::makeInstance(ModuleTemplate::class);
-        $this->getLanguageService()->includeLLFile('EXT:func/Resources/Private/Language/locallang_mod_web_func.xlf');
+        $this->pageFunctionsService = GeneralUtility::makeInstance(PageFunctionsService::class);
+        $this->pageFunctionsService->getLanguageService()->includeLLFile('EXT:func/Resources/Private/Language/locallang_mod_web_func.xlf');
         $this->moduleConfig = [
             'name' => $this->moduleName,
         ];
@@ -205,7 +210,7 @@ class PageFunctionsController
         }
         $this->id = (int)GeneralUtility::_GP('id');
         $this->command = GeneralUtility::_GP('CMD');
-        $this->permissionsClause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
+        $this->permissionsClause = $this->pageFunctionsService->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
         $this->menuConfig();
         $this->handleExternalFunctionValue();
     }
@@ -259,8 +264,8 @@ class PageFunctionsController
             // Setting up the context sensitive menu:
             $this->moduleTemplate->getPageRenderer()->loadRequireJsModule('TYPO3/CMS/Backend/ContextMenu');
 
-            $this->standaloneView = $this->getFluidTemplateObject('func', 'func');
-            $this->standaloneView->assign('moduleName', $this->getModuleUrl('web_func'));
+            $this->standaloneView = $this->pageFunctionsService->getFluidTemplateObject('func', 'func');
+            $this->standaloneView->assign('moduleName', $this->pageFunctionsService->getModuleUrl('web_func'));
             $this->standaloneView->assign('id', $this->id);
             $this->standaloneView->assign('functionMenuModuleContent', $this->getExtObjContent());
             // Setting up the buttons and markers for docheader
@@ -269,9 +274,9 @@ class PageFunctionsController
             $this->outputContent .= $this->standaloneView->render();
         } else {
             // If no access or if ID == zero
-            $title = $this->getLanguageService()->getLL('title');
-            $message = $this->getLanguageService()->getLL('clickAPage_content');
-            $this->standaloneView = $this->getFluidTemplateObject('func', 'func', 'InfoBox');
+            $title = $this->pageFunctionsService->getLanguageService()->getLL('title');
+            $message = $this->pageFunctionsService->getLanguageService()->getLL('clickAPage_content');
+            $this->standaloneView = $this->pageFunctionsService->getFluidTemplateObject('func', 'func', 'InfoBox');
             $this->standaloneView->assignMultiple([
                 'title' => $title,
                 'message' => $message,
@@ -296,7 +301,7 @@ class PageFunctionsController
             $item = $menu
                 ->makeMenuItem()
                 ->setHref(
-                    $this->getModuleUrl(
+                    $this->pageFunctionsService->getModuleUrl(
                         $this->moduleName,
                         [
                             'id' => $this->id,
@@ -330,7 +335,7 @@ class PageFunctionsController
             // View page
             $viewButton = $buttonBar->makeLinkButton()
                 ->setOnClick(BackendUtility::viewOnClick($this->pageInfo['uid'], '', BackendUtility::BEgetRootLine($this->pageInfo['uid'])))
-                ->setTitle($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage'))
+                ->setTitle($this->pageFunctionsService->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage'))
                 ->setIcon($this->iconFactory->getIcon('actions-view-page', Icon::SIZE_SMALL))
                 ->setHref('#');
             $buttonBar->addButton($viewButton);
@@ -344,49 +349,6 @@ class PageFunctionsController
     }
 
     /**
-     * Returns LanguageService
-     *
-     * @return \TYPO3\CMS\Core\Localization\LanguageService
-     */
-    protected function getLanguageService()
-    {
-        return $GLOBALS['LANG'];
-    }
-
-    /**
-     * Returns the current BE user.
-     *
-     * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
-     */
-    protected function getBackendUser()
-    {
-        return $GLOBALS['BE_USER'];
-    }
-
-    /**
-     * returns a new standalone view, shorthand function
-     *
-     * @param string $extensionName
-     * @param string $controllerExtensionName
-     * @param string $templateName
-     * @return StandaloneView
-     * @throws \TYPO3\CMS\Extbase\Mvc\Exception\InvalidExtensionNameException
-     */
-    protected function getFluidTemplateObject($extensionName, $controllerExtensionName, $templateName = 'Main')
-    {
-        /** @var StandaloneView $view */
-        $view = GeneralUtility::makeInstance(StandaloneView::class);
-        $view->setLayoutRootPaths([GeneralUtility::getFileAbsFileName('EXT:' . $extensionName . '/Resources/Private/Layouts')]);
-        $view->setPartialRootPaths([GeneralUtility::getFileAbsFileName('EXT:' . $extensionName . '/Resources/Private/Partials')]);
-        $view->setTemplateRootPaths([GeneralUtility::getFileAbsFileName('EXT:' . $extensionName . '/Resources/Private/Templates')]);
-
-        $view->setTemplatePathAndFilename(GeneralUtility::getFileAbsFileName('EXT:' . $extensionName . '/Resources/Private/Templates/' . $templateName . '.html'));
-
-        $view->getRequest()->setControllerExtensionName($controllerExtensionName);
-        return $view;
-    }
-
-    /**
      * Initializes the internal moduleMenu array setting and unsetting items based on various conditions. It also merges in external menu items from the global array TBE_MODULES_EXT (see mergeExternalItems())
      * Then moduleSettings array is cleaned up (see \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()) so it contains only valid values. It's also updated with any SET[] values submitted.
      * Also loads the moduleTSConfig internal variable.
@@ -397,7 +359,7 @@ class PageFunctionsController
     {
         // Page / user TSconfig settings and blinding of menu-items
         $this->moduleTSConfig['properties'] = BackendUtility::getPagesTSconfig($this->id)['mod.'][$this->moduleConfig['name'] . '.'] ?? [];
-        $this->moduleMenu['function'] = $this->mergeExternalItems($this->moduleConfig['name'], 'function', $this->moduleMenu['function']);
+        $this->moduleMenu['function'] = $this->pageFunctionsService->mergeExternalItems($this->moduleConfig['name'], 'function', $this->moduleMenu['function']);
         $blindActions = $this->moduleTSConfig['properties']['menu.']['function.'] ?? [];
         foreach ($blindActions as $key => $value) {
             if (!$value && array_key_exists($key, $this->moduleMenu['function'])) {
@@ -415,29 +377,6 @@ class PageFunctionsController
     }
 
     /**
-     * Merges menu items from global array $TBE_MODULES_EXT
-     *
-     * @param string $modName Module name for which to find value
-     * @param string $menuKey Menu key, eg. 'function' for the function menu.
-     * @param array $menuArr The part of a MOD_MENU array to work on.
-     * @return array Modified array part.
-     * @internal
-     * @see \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction(), menuConfig()
-     */
-    private function mergeExternalItems($modName, $menuKey, $menuArr)
-    {
-        $mergeArray = $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey];
-        if (is_array($mergeArray)) {
-            foreach ($mergeArray as $key => $value) {
-                if (((string)$value['ws'] === '' || $this->getBackendUser()->workspace === 0 && GeneralUtility::inList($value['ws'], 'online')) || $this->getBackendUser()->workspace === -1 && GeneralUtility::inList($value['ws'], 'offline') || $this->getBackendUser()->workspace > 0 && GeneralUtility::inList($value['ws'], 'custom')) {
-                    $menuArr[$key] = $this->getLanguageService()->sL($value['title']);
-                }
-            }
-        }
-        return $menuArr;
-    }
-
-    /**
      * Loads $this->extensionClassConfiguration with the configuration for the CURRENT function of the menu.
      *
      * @param string $MM_key The key to moduleMenu for which to fetch configuration. 'function' is default since it is first and foremost used to get information per "extension object" (I think that is what its called)
@@ -449,27 +388,8 @@ class PageFunctionsController
         if ($MS_value === null) {
             $MS_value = $this->moduleSettings[$MM_key];
         }
-        $this->extensionClassConfiguration = $this->getExternalItemConfig($this->moduleConfig['name'], $MM_key, $MS_value);
+        $this->extensionClassConfiguration = $this->pageFunctionsService->getExternalItemConfig($this->moduleConfig['name'], $MM_key, $MS_value);
     }
-
-    /**
-     * Returns configuration values from the global variable $TBE_MODULES_EXT for the module given.
-     * For example if the module is named "web_info" and the "function" key ($menuKey) of moduleSettings is "stat" ($value) then you will have the values of $TBE_MODULES_EXT['webinfo']['MOD_MENU']['function']['stat'] returned.
-     *
-     * @param string $modName Module name
-     * @param string $menuKey Menu key, eg. "function" for the function menu. See $this->moduleMenu
-     * @param string $value Optionally the value-key to fetch from the array that would otherwise have been returned if this value was not set. Look source...
-     * @return mixed The value from the TBE_MODULES_EXT array.
-     * @see handleExternalFunctionValue()
-     */
-    private function getExternalItemConfig($modName, $menuKey, $value = '')
-    {
-        if (isset($GLOBALS['TBE_MODULES_EXT'][$modName])) {
-            return (string)$value !== '' ? $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey][$value] : $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey];
-        }
-        return null;
-    }
-
 
     /**
      * Creates an instance of the class found in $this->extensionClassConfiguration['name'] in $this->extensionObject if any (this should hold three keys, "name", "path" and "title" if a "Function menu module" tries to connect...)
@@ -522,7 +442,6 @@ class PageFunctionsController
         return $newContent;
     }
 
-
     /**
      * Calls the 'main' function inside the "Function menu module" if present
      *
@@ -533,8 +452,8 @@ class PageFunctionsController
         if ($this->extensionObject === null) {
             $flashMessage = GeneralUtility::makeInstance(
                 FlashMessage::class,
-                $this->getLanguageService()->sL('LLL:EXT:backend/Resources/Private/Language/locallang.xlf:no_modules_registered'),
-                $this->getLanguageService()->getLL('title'),
+                $this->pageFunctionsService->getLanguageService()->sL('LLL:EXT:backend/Resources/Private/Language/locallang.xlf:no_modules_registered'),
+                $this->pageFunctionsService->getLanguageService()->getLL('title'),
                 FlashMessage::ERROR
             );
             /** @var \TYPO3\CMS\Core\Messaging\FlashMessageService $flashMessageService */
@@ -548,15 +467,5 @@ class PageFunctionsController
                 $this->outputContent .= $this->extensionObject->main();
             }
         }
-    }
-
-    /**
-     * @param string $extensionName
-     * @return mixed
-     */
-    private function getModuleUrl($extensionName)
-    {
-        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
-        return $uriBuilder->buildUriFromRoute($extensionName);
     }
 }
